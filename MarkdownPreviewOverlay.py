@@ -29,6 +29,7 @@ from .overlay.md_render import (
     render_markdown_tables_as_html,
     resolve_markdown_image_paths,
 )
+from .overlay.ext_vintage import handle_vintage_command
 from .overlay.mermaid import (
     find_mermaid_cli,
     find_merman_cli,
@@ -66,6 +67,7 @@ def _get_keyboard_scroll_lines():
     except Exception:
         pass
     return 3.0
+
 
 MARKDOWN_EXTENSIONS = {".md", ".markdown", ".mdown", ".mkd"}
 SUPPORTED_EXTENSIONS = MARKDOWN_EXTENSIONS | {".txt", ".text"}
@@ -1064,36 +1066,42 @@ class MarkdownPreviewOverlayListener(sublime_plugin.EventListener):
         if not view.is_valid() or not view.settings().get(MODE_SETTING, False):
             return None
 
+        args = args or {}
+
+        # 1. Vintage extension: normalize vim navigation commands
+        if command_name in ("set_motion", "vi_scroll_lines"):
+            if not sublime.load_settings(SETTINGS_NAME).get("enable_vintage", True):
+                return None
+            res = handle_vintage_command(view, command_name, args)
+            if not res:
+                return None
+            command_name, args = res
+            if command_name not in ("move", "move_to"):
+                return (command_name, args)
+
+        # 2. Core move commands
         if command_name == "move":
-            args = args or {}
             by = args.get("by")
             forward = args.get("forward", True)
-
             if by == "lines":
-                lines = _get_keyboard_scroll_lines()
-                amount = -lines if forward else lines
-                return ("scroll_lines", {"amount": amount})
-
-            if by == "pages":
-                viewport_h = view.viewport_extent()[1]
-                line_h = view.line_height()
-                page_lines = max(1.0, (viewport_h / line_h) - 2.0) if line_h > 0 else 18.0
-                amount = -page_lines if forward else page_lines
-                return ("scroll_lines", {"amount": amount})
-
-            if by == "stops":
-                amount = -8.0 if forward else 8.0
-                return ("scroll_lines", {"amount": amount})
-
-            if by in ("characters", "words", "word_ends", "subwords", "subword_ends"):
+                count = _get_keyboard_scroll_lines()
+            elif by == "pages":
+                h = view.line_height()
+                count = max(1.0, (view.viewport_extent()[1] / h) - 2.0) if h > 0 else 18.0
+            elif by == "stops":
+                count = 8.0
+            elif by in ("characters", "words", "word_ends", "subwords", "subword_ends"):
                 return ("markdown_preview_overlay_noop", {})
+            else:
+                return None
+            return ("scroll_lines", {"amount": -count if forward else count})
 
-        elif command_name == "move_to":
-            args = args or {}
+        # 3. Core jump commands
+        if command_name == "move_to":
             to = args.get("to")
             if to in ("bof", "eof"):
                 return ("markdown_preview_overlay_scroll_to", {"to": to})
-            if to in ("bol", "eol"):
+            if to in ("bol", "eol", "hardbol", "hardeol"):
                 return ("markdown_preview_overlay_noop", {})
 
         return None

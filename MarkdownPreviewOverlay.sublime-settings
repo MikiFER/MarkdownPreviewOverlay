@@ -51,6 +51,12 @@
     // Default is 3.0 lines.
     "keyboard_scroll_lines": 3.0,
 
+    // Whether to enable navigation support for Vintage mode (Vim keybindings) in preview mode.
+    // When true (default), Vintage navigation commands such as j/k, ctrl+d/ctrl+u, and gg/G
+    // are automatically mapped to preview scrolling.
+    // Set to false if you prefer Vintage commands not to be intercepted in preview mode.
+    "enable_vintage": true,
+
     // Whether to output debug logging in the Sublime Text Console.
     // When true, logs events such as file changes to assist troubleshooting.
     "verbose_logging": false
