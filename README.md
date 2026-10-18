@@ -6,7 +6,7 @@ MarkdownPreviewOverlay is an editor-native Markdown preview and reading mode for
 
 ![MarkdownPreviewOverlay Demo](screenshot.gif)
 
-This extension is built on concept discussed in the forum topic: [Provide markdown preview mode using folded source and phantom](https://forum.sublimetext.com/t/provide-markdown-preview-mode-using-folded-source-and-phantom/79042). Join the discussion and share your thoughts or feedback in that thread!
+This overlay concept was originally designed as the chat preview feature for [TermMate](https://packagecontrol.io/packages/TermMate), and extracted into a standalone package as discussed in the forum topic: [Provide markdown preview mode using folded source and phantom](https://forum.sublimetext.com/t/provide-markdown-preview-mode-using-folded-source-and-phantom/79042). Join the forum and share your feedback in that thread!
 
 ## Features & Capabilities
 
