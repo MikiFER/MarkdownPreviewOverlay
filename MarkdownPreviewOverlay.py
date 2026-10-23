@@ -32,7 +32,6 @@ from .overlay.md_render import (
 from .overlay.ext_vintage import handle_vintage_command
 from .overlay.mermaid import (
     find_mermaid_cli,
-    find_merman_cli,
     mermaid_blocks,
     render_mermaid_blocks,
 )
