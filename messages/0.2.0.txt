@@ -1,0 +1,10 @@
+MarkdownPreviewOverlay v0.2.0
+=============================
+
+- Mermaid Diagram Rendering: Automatically renders fenced ```mermaid blocks
+  as high-definition Retina images in the background with zero UI freeze.
+  Supports both @mermaid-js/mermaid-cli (mmdc) and merman-cli.
+
+- Vintage Mode Navigation: Seamlessly scroll preview overlays using native
+  Vim keybindings, including j/k (by lines), Ctrl+d/u (half-page), and
+  gg/G (jump to top/bottom).
