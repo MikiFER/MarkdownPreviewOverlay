@@ -14,10 +14,10 @@ Compared to traditional external browsers or split-pane previewers, **MarkdownPr
 
 - **Zero Context-Switching**: Read and edit in the exact same view—never leave Sublime Text or juggle external browser windows.
 - **No Split-Pane Clutter**: Maximizes your entire editor width without dividing the screen into cramped columns or causing premature line wrapping.
-- **Exact Scroll & Cursor Preservation**: Seamlessly preserves and restores your exact cursor positions, active selections, viewport scroll offset, and manual code folds when toggling modes.
-- **Lightweight & Theme-Adaptive**: Powered directly by Sublime Text’s built-in `minihtml` engine (`mdpopups`) with zero background servers, minimal memory overhead, and automatic color scheme alignment.
+- **Position Sync & State Preservation**: Automatically aligns the preview with your current editing position, and seamlessly restores your exact cursors, selections, viewport offset, and Vim (Vintage) mode when toggling.
+- **Lightweight**: Powered directly by Sublime Text’s built-in `minihtml` engine (`mdpopups`) with zero background servers, minimal memory overhead, and automatic color scheme alignment.
 - **Full Complex Markdown Support**: Seamlessly renders complex Markdown constructs, featuring a custom table engine that auto-adapts to your viewport width, along with syntax-highlighted code blocks, blockquotes, and nested lists tailored for miniHTML.
-- **Mermaid Diagrams**: When a supported Mermaid CLI (`@mermaid-js/mermaid-cli` or `merman-cli`) is installed, fenced `mermaid` blocks automatically become PNG images. Rendering runs in the background, fits the preview width, and leaves code blocks unchanged if rendering fails. The CLI is discovered on `PATH`, in common install locations, or via user settings.
+- **Mermaid Diagrams**: Asynchronously renders fenced `mermaid` blocks into responsive inline diagrams via an auto-detected CLI (`@mermaid-js/mermaid-cli` or `merman-cli`), with graceful code fallback.
 
 > **Note**: Rendering is delegated directly to the `mdpopups` Package Control dependency without bundling a separate Markdown parser.
 
