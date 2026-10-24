@@ -158,6 +158,7 @@ def _capture_view_state(view):
         "line_numbers": view.settings().get("line_numbers"),
         "highlight_line": view.settings().get("highlight_line"),
         "margin": view.settings().get("margin"),
+        "command_mode": view.settings().get("command_mode"),
         "selections": [[s.a, s.b] for s in view.sel()],
         "viewport": list(view.viewport_position()),
         "folds": [[f.a, f.b] for f in view.folded_regions()],
@@ -174,6 +175,7 @@ def _restore_view_state(view, saved_state):
     orig_line_numbers = saved_state.get("line_numbers", True)
     orig_highlight_line = saved_state.get("highlight_line")
     orig_margin = saved_state.get("margin")
+    orig_command_mode = saved_state.get("command_mode")
     orig_selections = [
         sublime.Region(r[0], r[1])
         for r in saved_state.get("selections", [])
@@ -212,6 +214,11 @@ def _restore_view_state(view, saved_state):
         view.settings().set("margin", orig_margin)
     else:
         view.settings().erase("margin")
+
+    if orig_command_mode is not None:
+        view.settings().set("command_mode", orig_command_mode)
+    else:
+        view.settings().erase("command_mode")
 
     view.set_read_only(bool(orig_read_only))
 
@@ -683,6 +690,8 @@ class PreviewState(object):
 
         self.previewing = True
         self.view.settings().set(MODE_SETTING, True)
+        if sublime.load_settings(SETTINGS_NAME).get("enable_vintage", True):
+            self.view.settings().set("command_mode", True)
         if self._should_show_status_indicator():
             self.view.set_status(STATUS_KEY, "MarkdownOverlay")
         else:
@@ -1026,17 +1035,44 @@ class MarkdownPreviewOverlayRefreshCommand(sublime_plugin.TextCommand):
         return _is_previewable(self.view) and bool(is_preview)
 
 
+class MarkdownPreviewOverlayScrollCommand(sublime_plugin.TextCommand):
+    def run(self, edit, lines=0.0, pages=0.0):
+        if not self.view.is_valid():
+            return
+        curr_x, curr_y = self.view.viewport_position()
+        _, layout_h = self.view.layout_extent()
+        _, viewport_h = self.view.viewport_extent()
+        max_y = max(0.0, layout_h - viewport_h)
+        # Fallback to standard 20px (typical 11-12pt line height)
+        line_h = self.view.line_height() or 20.0
+
+        delta_y = lines * line_h + pages * max(viewport_h - 2.0 * line_h, line_h)
+        target_y = max(0.0, min(max_y, curr_y + delta_y))
+        self.view.set_viewport_position((curr_x, target_y), False)
+        state = _states.get(self.view.id())
+        if state is not None:
+            state.last_preview_y = target_y
+
+    def is_enabled(self):
+        return bool(self.view.settings().get(MODE_SETTING, False))
+
+
 class MarkdownPreviewOverlayScrollToCommand(sublime_plugin.TextCommand):
     def run(self, edit, to="bof"):
         if not self.view.is_valid():
             return
+        state = _states.get(self.view.id())
         if to == "bof":
             self.view.set_viewport_position((0.0, 0.0), False)
+            if state is not None:
+                state.last_preview_y = 0.0
         elif to == "eof":
             _, layout_h = self.view.layout_extent()
             _, viewport_h = self.view.viewport_extent()
             max_y = max(0.0, layout_h - viewport_h)
             self.view.set_viewport_position((0.0, max_y), False)
+            if state is not None:
+                state.last_preview_y = max_y
 
     def is_enabled(self):
         return bool(self.view.settings().get(MODE_SETTING, False))
@@ -1126,7 +1162,7 @@ class MarkdownPreviewOverlayListener(sublime_plugin.EventListener):
             if not res:
                 return None
             command_name, args = res
-            if command_name not in ("move", "move_to"):
+            if command_name not in ("move", "move_to", "scroll_lines"):
                 return (command_name, args)
 
         # 2. Core move commands
@@ -1134,17 +1170,26 @@ class MarkdownPreviewOverlayListener(sublime_plugin.EventListener):
             by = args.get("by")
             forward = args.get("forward", True)
             if by == "lines":
-                count = _get_keyboard_scroll_lines()
+                count = _get_keyboard_scroll_lines() * args.get("count", 1)
+                return (
+                    "markdown_preview_overlay_scroll",
+                    {"lines": count if forward else -count},
+                )
             elif by == "pages":
-                h = view.line_height()
-                count = max(1.0, (view.viewport_extent()[1] / h) - 2.0) if h > 0 else 18.0
+                return (
+                    "markdown_preview_overlay_scroll",
+                    {"pages": 1.0 if forward else -1.0},
+                )
             elif by == "stops":
                 count = 8.0
+                return (
+                    "markdown_preview_overlay_scroll",
+                    {"lines": count if forward else -count},
+                )
             elif by in ("characters", "words", "word_ends", "subwords", "subword_ends"):
                 return ("markdown_preview_overlay_noop", {})
             else:
                 return None
-            return ("scroll_lines", {"amount": -count if forward else count})
 
         # 3. Core jump commands
         if command_name == "move_to":
@@ -1153,6 +1198,11 @@ class MarkdownPreviewOverlayListener(sublime_plugin.EventListener):
                 return ("markdown_preview_overlay_scroll_to", {"to": to})
             if to in ("bol", "eol", "hardbol", "hardeol"):
                 return ("markdown_preview_overlay_noop", {})
+
+        # 4. Scroll lines command
+        if command_name == "scroll_lines":
+            amount = args.get("amount", 0.0)
+            return ("markdown_preview_overlay_scroll", {"lines": -amount})
 
         return None
 
