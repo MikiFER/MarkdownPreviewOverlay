@@ -127,7 +127,8 @@ def _render_png(executable, source, cli_type=None, scale=_DPI_SCALE):
 
 
 def render_mermaid_blocks(
-    text, executable, max_width=None, on_error=None, cli_type=None, scale=_DPI_SCALE
+    text, executable, max_width=None, on_error=None, cli_type=None, scale=_DPI_SCALE,
+    deltas=None
 ):
     """Replace Mermaid fences with embedded PNGs; preserve failed blocks verbatim."""
     output = []
@@ -145,6 +146,9 @@ def render_mermaid_blocks(
             if max_width and display_width > max_width:
                 display_height = max(1, int(display_height * max_width / display_width))
                 display_width = max_width
+            if deltas is not None:
+                start_line = text[:start].count('\n')
+                deltas.append((start_line, display_height))
             image = (
                 '<img src="data:image/png;base64,{}" alt="Mermaid diagram" '
                 'width="{}" height="{}" />'

@@ -132,6 +132,23 @@ class TestMermaidRendering(unittest.TestCase):
         )
         self.assertIsNone(find_mermaid_cli('/invalid/path/tool'))
 
+    @mock.patch('overlay.mermaid.os.name', 'nt')
+    @mock.patch('overlay.mermaid.subprocess.run')
+    def test_windows_creationflags(self, run):
+        run.return_value = subprocess.CompletedProcess([], 0, self.png, b'')
+        render_mermaid_blocks('```mermaid\ngraph TD\n```', 'mmdc')
+        self.assertIn('creationflags', run.call_args.kwargs)
+
+    @mock.patch('overlay.mermaid.subprocess.run')
+    def test_render_mermaid_blocks_deltas(self, run):
+        run.return_value = subprocess.CompletedProcess([], 0, self.png, b'')
+        source = 'Line 0\nLine 1\n```mermaid\ngraph TD\n A --> B\n```\n'
+        deltas = []
+        render_mermaid_blocks(source, 'mmdc', deltas=deltas)
+        self.assertEqual(len(deltas), 1)
+        self.assertEqual(deltas[0][0], 2)
+        self.assertEqual(deltas[0][1], 250)
+
 
 if __name__ == '__main__':
     unittest.main()

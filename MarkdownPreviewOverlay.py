@@ -45,6 +45,7 @@ STATUS_KEY = "markdown_preview_overlay"
 SETTINGS_NAME = "MarkdownPreviewOverlay.sublime-settings"
 SETTINGS_KEY = "markdown_preview_overlay.settings"
 PREVIEW_MARGIN = 16
+TOOLBAR_OFFSET = 42.0
 
 
 def _debug_log(msg):
@@ -258,6 +259,7 @@ class PreviewState(object):
         self.control_generation = 0
         self.preview_generation = 0
         self.edit_control_mode = None
+        self.last_preview_y = None
         self.refresh_lock = threading.Lock()
 
     def _get_file_mtime(self):
@@ -378,10 +380,17 @@ class PreviewState(object):
             pass
         return None
 
+    def _get_source_top_row(self):
+        """Return the source view's top visible line index, or 0."""
+        try:
+            return max(0, self.view.rowcol(self.view.visible_region().begin())[0])
+        except Exception:
+            return 0
+
     def _get_source_position_ratio(self):
         """Calculate the normalized scroll ratio (0.0 - 1.0) of the source view's top visible line."""
         try:
-            top_row = self.view.rowcol(self.view.visible_region().begin())[0]
+            top_row = self._get_source_top_row()
             if top_row <= 0:
                 return 0.0
             text = self.view.substr(sublime.Region(0, self.view.size()))
@@ -397,13 +406,14 @@ class PreviewState(object):
                 return
             if ratio <= 0.0:
                 self.view.set_viewport_position((0.0, 0.0), False)
+                self.last_preview_y = 0.0
                 return
             _, layout_h = self.view.layout_extent()
             if layout_h <= 0:
                 return
-            toolbar_offset = 42.0
-            target_y = toolbar_offset + ratio * max(0.0, layout_h - toolbar_offset)
+            target_y = TOOLBAR_OFFSET + ratio * max(0.0, layout_h - TOOLBAR_OFFSET)
             self.view.set_viewport_position((0.0, target_y), False)
+            self.last_preview_y = target_y
 
         sublime.set_timeout(apply_scroll)
 
@@ -488,7 +498,7 @@ class PreviewState(object):
         self.edit_control_mode = "inline"
         self.rendered_change_count = self.view.change_count()
 
-    def _render_preview_overlay(self):
+    def _render_preview_overlay(self, initial_top_row=None):
         """Display the source preview and start the optional Mermaid rendering stage."""
         if not self.view.is_valid():
             return
@@ -496,9 +506,11 @@ class PreviewState(object):
         self.preview_generation += 1
         markdown = self.view.substr(sublime.Region(0, self.view.size()))
         self._display_preview_overlay(markdown)
-        self._schedule_mermaid_render(markdown, self.preview_generation)
+        self._schedule_mermaid_render(
+            markdown, self.preview_generation, initial_top_row=initial_top_row
+        )
 
-    def _schedule_mermaid_render(self, source, generation):
+    def _schedule_mermaid_render(self, source, generation, initial_top_row=None):
         """Render all Mermaid blocks in the background, then display the updated document."""
         if not self._is_mermaid_enabled():
             return
@@ -513,9 +525,10 @@ class PreviewState(object):
         image_width = self._get_image_max_width()
 
         def render_diagrams():
+            deltas = []
             rendered = render_mermaid_blocks(
                 source, executable, max_width=image_width, on_error=_debug_log,
-                cli_type=cli_type,
+                cli_type=cli_type, deltas=deltas,
             )
 
             def apply_diagrams():
@@ -524,8 +537,41 @@ class PreviewState(object):
                         and change_count == self.view.change_count()
                         and rendered != source):
                     viewport = self.view.viewport_position()
+                    _, old_layout_h = self.view.layout_extent()
                     self._display_preview_overlay(rendered)
                     self.view.set_viewport_position(viewport, False)
+
+                    # Only diagrams above the reading line push content down
+                    if initial_top_row is not None:
+                        ref_row = initial_top_row
+                    else:
+                        avail = max(1.0, old_layout_h - TOOLBAR_OFFSET)
+                        scroll_r = max(0.0, (viewport[1] - TOOLBAR_OFFSET) / avail)
+                        ref_row = int(scroll_r * (source.count('\n') + 1))
+
+                    if deltas:
+                        above_h = sum(h for line, h in deltas if line < ref_row)
+                        total_h = sum(h for _, h in deltas)
+                        ratio_above = (above_h / total_h) if total_h > 0 else 0.0
+                    else:
+                        ratio_above = 0.0
+
+                    def calibrate():
+                        if not self.view.is_valid() or not self.previewing:
+                            return
+                        if generation != self.preview_generation:
+                            return
+                        if (self.last_preview_y is not None
+                                and abs(viewport[1] - self.last_preview_y) >= 10.0):
+                            return
+
+                        _, new_layout_h = self.view.layout_extent()
+                        delta_h = max(0.0, new_layout_h - old_layout_h)
+                        target_y = max(0.0, viewport[1] + ratio_above * delta_h)
+                        self.view.set_viewport_position((viewport[0], target_y), False)
+                        self.last_preview_y = target_y
+
+                    sublime.set_timeout(calibrate)
 
             sublime.set_timeout(apply_diagrams)
 
@@ -611,7 +657,9 @@ class PreviewState(object):
             return
 
         position_ratio = 0.0
+        initial_top_row = None
         if not preserve_saved_state and self._should_sync_preview_position():
+            initial_top_row = self._get_source_top_row()
             position_ratio = self._get_source_position_ratio()
 
         if not preserve_saved_state or not self.view.settings().has(ORIGINAL_STATE_SETTING):
@@ -645,7 +693,9 @@ class PreviewState(object):
             self.view.settings().set("gutter", False)
             self.view.settings().set("margin", PREVIEW_MARGIN)
         self.view.set_read_only(True)
-        self._render_preview_overlay()
+        self._render_preview_overlay(
+            initial_top_row=initial_top_row if not preserve_saved_state else None
+        )
         self.rendered_change_count = self.view.change_count()
         self.rendered_mtime = self._get_file_mtime()
         if not preserve_saved_state:
@@ -667,6 +717,7 @@ class PreviewState(object):
         self.previewing = False
         self.preview_generation += 1
         self.fold_region = None
+        self.last_preview_y = None
         self.view.settings().erase(MODE_SETTING)
         self.view.settings().erase(ORIGINAL_STATE_SETTING)
         self.view.erase_status(STATUS_KEY)
