@@ -1,5 +1,6 @@
 # MarkdownPreviewOverlay
 
+[![Sublime Forum](https://img.shields.io/badge/Sublime_Forum-Discussion-FF9800?logo=sublimetext&logoColor=white)](https://forum.sublimetext.com/t/provide-markdown-preview-mode-using-folded-source-and-phantom/79042)
 [![Package Control](https://img.shields.io/badge/Package_Control-MarkdownPreviewOverlay-389826?logo=sublimetext&logoColor=white)](https://packagecontrol.io/packages/MarkdownPreviewOverlay)
 
 MarkdownPreviewOverlay is an editor-native Markdown preview and reading mode for Sublime Text. It renders formatted Markdown directly inside your active tab—no external browser, no split-pane, and zero context switching.
